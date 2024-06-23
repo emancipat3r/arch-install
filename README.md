@@ -38,7 +38,7 @@ This repository contains a bash script that provides a Text User Interface (TUI)
     sudo ./tui_install.sh
     ```
 
-Script Breakdown
+## Script Breakdown
 
 1. Check for root privileges: Ensure the script is run as root.
 2. Install dialog: Install the dialog package if it is not already installed.
