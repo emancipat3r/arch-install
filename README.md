@@ -1,61 +1,76 @@
-# Arch Linux Minimal GNOME Installation Script
+# Arch Linux Automated Installation Script
 
-This repository contains a bash script that provides a Text User Interface (TUI), via `dialog`, for installing Arch Linux with a minimal GNOME environment
-
-## Features
-
-- Interactive disk partitioning
-- Automatic formatting and mounting of partitions
-- Installation of base Arch Linux system
-- Configuration of timezone, localization, and hostname
-- NetworkManager setup and enablement
-- GRUB bootloader installation and configuration
-- Minimal GNOME environment installation
-- User creation with sudo privileges
+This script automates the installation of Arch Linux with optional software and configurations.
 
 ## Prerequisites
 
-- Boot from the Arch Linux USB.
-- Connection to the internet (e.g., via `iwctl` for Wi-Fi or `dhcpcd` for Ethernet).
+ - You must have root privileges to run this script.
+ - The script requires dialog for the interactive menu.
 
 ## Usage
 
-1. Clone the repository or download the script.
+1. Download the script and make it executable:
 
-   ```bash
-   git clone https://github.com/yourusername/arch-linux-minimal-gnome.git
-   cd arch-linux-minimal-gnome
+```bash
+chmod +x install.sh
+```
 
-2. Make the script executable:
+2. Run the script:
 
-    ```bash
-    chmod +x tui_install.sh
-    ```
+```bash
+sudo ./install.sh
+```
 
-3. Run the script with root privileges:
+## Script Details
 
-    ```bash
-    sudo ./tui_install.sh
-    ```
+### User Input
 
-## Script Breakdown
+The script will prompt for the following information:
 
-1. Check for root privileges: Ensure the script is run as root.
-2. Install dialog: Install the dialog package if it is not already installed.
-3. Set up variables: Use dialog to gather user input for partitions, hostname, and username.
-4. Update system clock: Ensure the system clock is accurate.
-5. Partition the disks: Create GPT partition table and partitions for root and boot.
-6. Format the partitions: Format the root as ext4 and boot as FAT32.
-7. Mount the file systems: Mount root and boot partitions.
-8. Install essential packages: Install the base system.
-9. Generate fstab: Create file system table.
-10. Chroot into the new system: Change root into the new system and perform configurations.
-11. Set up timezone, localization, hostname: Configure time, locale, and hostname.
-12. Set root password: Set the root password.
-13. Install and enable NetworkManager: Ensure network connectivity.
-14. Install and configure bootloader: Install and configure GRUB.
-15. Create a new user: Add a new user with sudo privileges.
-16. Install Xorg and GNOME packages: Install minimal Xorg and GNOME packages.
-17. Enable GDM: Enable GNOME Display Manager.
-18. Clean up: Clean up the package cache.
-19. Unmount file systems and reboot: Finish installation and reboot the system.
+1. Hostname: Enter the desired hostname for the system.
+2. Username: Enter the desired username.
+3. Root Password: Enter the password for the root user.
+4. User Password: Enter the password for the new user.
+5. Timezone: Select or enter the desired timezone.
+6. Partition Type: Select the type of partition (DOS, GPT, EFI).
+7. Auto Reboot: Choose whether to reboot the system automatically after installation.
+8. SSH Server Configuration:
+    - Whether to configure the system as an SSH server.
+    - SSH port (default is 22).
+    - Allow root login via SSH.
+    - Allow password login via SSH.
+9. Software Selection: Select common software to install (e.g., Firefox, Git, Docker, etc.).
+10. Font Selection: If fonts are selected, choose specific fonts to install.
+
+### Partitioning and Formatting
+
+The script supports three partition types:
+
+ - DOS (MBR)
+ - GPT
+ - EFI
+
+It will partition the disk, format the partitions, and set up the mount points.
+
+### Swap Space
+
+The script calculates the swap size based on the total RAM plus an additional 2GB.
+
+### Base System Installation
+
+The script installs the base system and generates the fstab file.
+
+### Chroot Configuration
+
+Inside the chroot environment, the script:
+
+ - Sets up the timezone, localization, hostname, and root/user passwords.
+ - Installs and enables NetworkManager.
+ - Configures the SSH server if selected.
+ - Installs and configures the bootloader.
+ - Installs selected software and fonts.
+ - Cleans up the package cache.
+
+### Exiting Chroot and Reboot
+
+After exiting the chroot environment, the script unmounts the partitions and optionally reboots the system.
