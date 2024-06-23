@@ -28,14 +28,15 @@ This repository contains a bash script that provides a Text User Interface (TUI)
 
 2. Make the script executable:
 
-```bash
-chmod +x tui_install.sh
-```
+    ```bash
+    chmod +x tui_install.sh
+    ```
 
 3. Run the script with root privileges:
-```bash
-sudo ./tui_install.sh
-```
+
+    ```bash
+    sudo ./tui_install.sh
+    ```
 
 Script Breakdown
 
