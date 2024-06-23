@@ -1,1 +1,3 @@
 # arch-install
+
+test
