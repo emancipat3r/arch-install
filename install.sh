@@ -71,6 +71,16 @@ else
   esac
 fi
 
+# List available disks and sizes
+DISK_LIST=()
+while read -r line; do
+  DISK_NAME=$(echo "$line" | awk '{print $1}')
+  DISK_SIZE=$(echo "$line" | awk '{print $4}')
+  DISK_LIST+=("$DISK_NAME" "$DISK_SIZE" "off")
+done < <(lsblk -dn -o NAME,SIZE,TYPE | grep disk)
+
+INSTALL_DISK=$(dialog --title "Select Disk" --radiolist "Choose the disk for OS installation:" 15 70 6 "${DISK_LIST[@]}" 3>&1 1>&2 2>&3)
+
 # Ask for partition type
 PARTITION_TYPE=$(dialog --title "Select Partition Type" --menu "Choose one of the following partition types:" 15 50 4 \
   1 "DOS (MBR)" \
@@ -233,27 +243,27 @@ fi
 print_status "Partitioning and formatting the disk..."
 case $PARTITION_TYPE in
   1)
-    parted /dev/sda --script mklabel msdos
-    parted /dev/sda --script mkpart primary ext4 1MiB 100%
-    mkfs.ext4 /dev/sda1
-    mount /dev/sda1 /mnt
+    parted /dev/$INSTALL_DISK --script mklabel msdos
+    parted /dev/$INSTALL_DISK --script mkpart primary ext4 1MiB 100%
+    mkfs.ext4 /dev/${INSTALL_DISK}1
+    mount /dev/${INSTALL_DISK}1 /mnt
     ;;
   2)
-    parted /dev/sda --script mklabel gpt
-    parted /dev/sda --script mkpart primary ext4 1MiB 100%
-    mkfs.ext4 /dev/sda1
-    mount /dev/sda1 /mnt
+    parted /dev/$INSTALL_DISK --script mklabel gpt
+    parted /dev/$INSTALL_DISK --script mkpart primary ext4 1MiB 100%
+    mkfs.ext4 /dev/${INSTALL_DISK}1
+    mount /dev/${INSTALL_DISK}1 /mnt
     ;;
   3)
-    parted /dev/sda --script mklabel gpt
-    parted /dev/sda --script mkpart primary fat32 1MiB 512MiB
-    parted /dev/sda --script set 1 esp on
-    mkfs.fat -F32 /dev/sda1
-    parted /dev/sda --script mkpart primary ext4 512MiB 100%
-    mkfs.ext4 /dev/sda2
-    mount /dev/sda2 /mnt
+    parted /dev/$INSTALL_DISK --script mklabel gpt
+    parted /dev/$INSTALL_DISK --script mkpart primary fat32 1MiB 512MiB
+    parted /dev/$INSTALL_DISK --script set 1 esp on
+    mkfs.fat -F32 /dev/${INSTALL_DISK}1
+    parted /dev/$INSTALL_DISK --script mkpart primary ext4 512MiB 100%
+    mkfs.ext4 /dev/${INSTALL_DISK}2
+    mount /dev/${INSTALL_DISK}2 /mnt
     mkdir -p /mnt/boot/efi
-    mount /dev/sda1 /mnt/boot/efi
+    mount /dev/${INSTALL_DISK}1 /mnt/boot/efi
     ;;
 esac
 
@@ -300,10 +310,13 @@ echo "$USERNAME ALL=(ALL) ALL" >> /etc/sudoers
 
 # Install necessary packages
 pacman -Syu --noconfirm
-pacman -S --noconfirm base-devel linux-headers networkmanager
+pacman -S --noconfirm base-devel linux-headers networkmanager xorg-server xorg-xinit xorg-xrandr xorg-xsetroot xorg-xprop gnome-shell gnome-control-center gnome-terminal gdm
 
 # Enable NetworkManager
 systemctl enable NetworkManager
+
+# Enable GDM
+systemctl enable gdm
 
 # Configure SSH server if selected
 if [ "$SSH_SERVER" == "1" ]; then
@@ -327,7 +340,7 @@ pacman -S --noconfirm grub efibootmgr
 if [ "$PARTITION_TYPE" == "3" ]; then
   grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
 else
-  grub-install --target=i386-pc /dev/sda
+  grub-install --target=i386-pc /dev/$INSTALL_DISK
 fi
 grub-mkconfig -o /boot/grub/grub.cfg
 
