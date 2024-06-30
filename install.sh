@@ -3,7 +3,7 @@
 # Check for root privileges
 if [ "$EUID" -ne 0 ]; then
   echo "Please run as root"
-  exit
+  exit 1
 fi
 
 # Install dialog if not already installed
@@ -75,18 +75,30 @@ fi
 DISK_LIST=()
 while read -r line; do
   DISK_NAME=$(echo "$line" | awk '{print $1}')
-  DISK_SIZE=$(echo "$line" | awk '{print $4}')
+  DISK_SIZE=$(echo "$line" | awk '{print $2}')
   DISK_LIST+=("$DISK_NAME" "$DISK_SIZE" "off")
 done < <(lsblk -dn -o NAME,SIZE,TYPE | grep disk)
 
 INSTALL_DISK=$(dialog --title "Select Disk" --radiolist "Choose the disk for OS installation:" 15 70 6 "${DISK_LIST[@]}" 3>&1 1>&2 2>&3)
 
+# Validate disk selection
+if [ -z "$INSTALL_DISK" ]; then
+  print_error "No disk selected. Exiting."
+  exit 1
+fi
+
 # Ask for partition type
 PARTITION_TYPE=$(dialog --title "Select Partition Type" --menu "Choose one of the following partition types:" 15 50 4 \
   1 "DOS (MBR)" \
   2 "GPT" \
-  3 "EFI" \
+  3 'GPT + EFI' \
   3>&1 1>&2 2>&3)
+
+# Validate partition type selection
+if [ -z "$PARTITION_TYPE" ]; then
+  print_error "No partition type selected. Exiting."
+  exit 1
+fi
 
 # Ask if the user wants to auto-reboot
 AUTO_REBOOT=$(dialog --title "Auto Reboot" --menu "Do you want to auto reboot after installation?" 10 40 2 \
@@ -117,21 +129,21 @@ declare -A SOFTWARE_SELECTION=(
   ["1"]="ohmyzsh"
   ["2"]="kitty"
   ["3"]="firefox"
-  ["4"]="vscodium-bin"
+  ["4"]="code"
   ["5"]="git"
   ["6"]="vim"
   ["7"]="aur-support"
   ["8"]="mullvad-vpn"
   ["9"]="virtualbox"
   ["10"]="gnome-tweaks"
-  ["11"]="eog"
+  ["11"]='eog'
   ["12"]="fonts"
   ["13"]="libreoffice-fresh"
   ["14"]="gimp"
   ["15"]="inkscape"
   ["16"]="gnome-calendar"
   ["17"]="gnome-weather"
-  ["18"]="evolution"
+  ["18"]="thunderbird"
   ["19"]="docker"
   ["20"]="nodejs npm"
   ["21"]="python python-pip"
@@ -159,7 +171,7 @@ declare -A SOFTWARE_SELECTION=(
   ["43"]="neofetch"
   ["44"]="gnome-system-monitor"
   ["45"]="gnome-usage"
-  ["46"]="google-chrome"
+  ["46"]="chromium"
   ["47"]="brave-bin"
   ["48"]="openssh"
   ["49"]="networkmanager"
@@ -171,7 +183,7 @@ SOFTWARE_SELECTION_DIALOG=$(dialog --title "Common Software" --checklist "Select
   1 "Oh My Zsh" off \
   2 "Kitty" off \
   3 "Firefox" off \
-  4 "OSS Codium" off \
+  4 "OSS - Code" off \
   5 "Git" off \
   6 "Vim" off \
   7 "AUR Support" off \
@@ -188,16 +200,16 @@ SOFTWARE_SELECTION_DIALOG=$(dialog --title "Common Software" --checklist "Select
   18 "Evolution (Email Client)" off \
   19 "Docker" off \
   20 "Node.js" off \
-  21 "Python" off \
+  21 "Python3" off \
   22 "JDK (Java Development Kit)" off \
   23 "IntelliJ IDEA Community Edition" off \
-  24 "gnome-calculator" off \
-  25 "evince (Document Viewer)" off \
-  26 "gnome-disk-utility" off \
-  27 "nautilus (Files)" off \
-  28 "gnome-screenshot" off \
-  29 "gnome-control-center" off \
-  30 "gnome-text-editor" off \
+  24 "Gnome Calculator (gnome-calculator)" off \
+  25 "Evince (Document Viewer)" off \
+  26 "Disk (gnome-disk-utility)" off \
+  27 "Nautilus (File Explorer)" off \
+  28 "Gnome Screenshot (gnome-screenshot)" off \
+  29 "Gnome Settings (gnome-control-center)" off \
+  30 "Gnome Text Editor (gnome-text-editor)" off \
   31 "aria2" off \
   32 "zsh-autosuggestions" off \
   33 "zsh-syntax-highlighting" off \
@@ -212,8 +224,8 @@ SOFTWARE_SELECTION_DIALOG=$(dialog --title "Common Software" --checklist "Select
   42 "Htop" off \
   43 "Neofetch" off \
   44 "GNOME System Monitor" off \
-  45 "GNOME Usage" off \
-  46 "Google Chrome (AUR)" off \
+  45 "GNOME Usage (Resource Monitor)" off \
+  46 "Chromium" off \
   47 "Brave Browser (AUR)" off \
   48 "OpenSSH" off \
   49 "NetworkManager" off \
@@ -239,33 +251,55 @@ if [[ "$SOFTWARE_SELECTION_DIALOG" == *"12"* ]]; then
     3>&1 1>&2 2>&3)
 fi
 
-# Partitioning and formatting
+# Partitioning and formatting based on selection
 print_status "Partitioning and formatting the disk..."
-case $PARTITION_TYPE in
-  1)
-    parted /dev/$INSTALL_DISK --script mklabel msdos
-    parted /dev/$INSTALL_DISK --script mkpart primary ext4 1MiB 100%
-    mkfs.ext4 /dev/${INSTALL_DISK}1
-    mount /dev/${INSTALL_DISK}1 /mnt
-    ;;
-  2)
-    parted /dev/$INSTALL_DISK --script mklabel gpt
-    parted /dev/$INSTALL_DISK --script mkpart primary ext4 1MiB 100%
-    mkfs.ext4 /dev/${INSTALL_DISK}1
-    mount /dev/${INSTALL_DISK}1 /mnt
-    ;;
-  3)
-    parted /dev/$INSTALL_DISK --script mklabel gpt
-    parted /dev/$INSTALL_DISK --script mkpart primary fat32 1MiB 512MiB
-    parted /dev/$INSTALL_DISK --script set 1 esp on
-    mkfs.fat -F32 /dev/${INSTALL_DISK}1
-    parted /dev/$INSTALL_DISK --script mkpart primary ext4 512MiB 100%
-    mkfs.ext4 /dev/${INSTALL_DISK}2
-    mount /dev/${INSTALL_DISK}2 /mnt
-    mkdir -p /mnt/boot/efi
-    mount /dev/${INSTALL_DISK}1 /mnt/boot/efi
-    ;;
-esac
+
+for type in $PARTITION_TYPE; do
+  case $type in
+    1) # DOS (MBR)
+      parted /dev/$INSTALL_DISK --script mklabel msdos
+      echo -e "n\np\n\n\n+512M\na\nw" | fdisk /dev/$INSTALL_DISK
+      echo -e "n\np\n\n\n+$SWAP_SIZE\nt\n\n82\nw" | fdisk /dev/$INSTALL_DISK
+      echo -e "n\np\n\n\n\nw" | fdisk /dev/$INSTALL_DISK
+      mkfs.ext4 /dev/${INSTALL_DISK}1
+      mkfs.ext4 /dev/${INSTALL_DISK}3
+      mkswap /dev/${INSTALL_DISK}2
+      swapon /dev/${INSTALL_DISK}2
+      mount /dev/${INSTALL_DISK}3 /mnt
+      ;;
+    2) # GPT
+      parted /dev/$INSTALL_DISK --script mklabel gpt
+      sgdisk -n=1:0:+31M -t=1:ef02 -c=0:mbrboot /dev/$INSTALL_DISK
+      sgdisk -n=2:0:+512M -c=0:boot /dev/$INSTALL_DISK
+      sgdisk -n=3:0:+${SWAP_SIZE} -t=3:8200 -c=0:swap /dev/$INSTALL_DISK
+      sgdisk -n=4:0:0 -c=0:root /dev/$INSTALL_DISK
+      mkfs.ext4 /dev/${INSTALL_DISK}4
+      mkfs.ext4 /dev/${INSTALL_DISK}2
+      mkswap /dev/${INSTALL_DISK}3
+      swapon /dev/${INSTALL_DISK}3
+      mount /dev/${INSTALL_DISK}4 /mnt
+      mkdir -p /mnt/boot
+      mount /dev/${INSTALL_DISK}2 /mnt/boot
+      ;;
+    3) # EFI + GPT
+      parted /dev/$INSTALL_DISK --script mklabel gpt
+      sgdisk -n=1:0:+512M -t=1:ef00 -c=0:boot /dev/$INSTALL_DISK
+      sgdisk -n=2:0:+${SWAP_SIZE} -t=2:8200 -c=0:swap /dev/$INSTALL_DISK
+      sgdisk -n=3:0:0 -c=0:root /dev/$INSTALL_DISK
+      mkfs.fat -F32 /dev/${INSTALL_DISK}1
+      mkfs.ext4 /dev/${INSTALL_DISK}3
+      mkswap /dev/${INSTALL_DISK}2
+      swapon /dev/${INSTALL_DISK}2
+      mount /dev/${INSTALL_DISK}3 /mnt
+      mkdir -p /mnt/boot/efi
+      mount /dev/${INSTALL_DISK}1 /mnt/boot/efi
+      ;;
+    *)
+      print_error "Invalid partition type selected. Exiting."
+      exit 1
+      ;;
+  esac
+done
 
 # Create and activate swap
 print_status "Creating and activating swap..."
@@ -338,7 +372,7 @@ fi
 # Install and configure bootloader
 pacman -S --noconfirm grub efibootmgr
 if [ "$PARTITION_TYPE" == "3" ]; then
-  grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
+  grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB
 else
   grub-install --target=i386-pc /dev/$INSTALL_DISK
 fi
