@@ -351,7 +351,7 @@ echo "$USERNAME ALL=(ALL) ALL" >> /etc/sudoers
 
 # Install necessary packages
 pacman -Syu --noconfirm
-pacman -S --noconfirm base-devel linux-headers networkmanager xorg-server xorg-xinit xorg-xrandr xorg-xsetroot xorg-xprop gnome-shell gnome-control-center gnome-terminal gdm
+pacman -S --noconfirm base-devel linux-headers networkmanager xorg-server xorg-xinit xorg-xrandr xorg-xsetroot xorg-xprop gnome-shell gnome-control-center gnome-terminal gdm gnome-tweaks dconf
 
 # Enable NetworkManager
 systemctl enable NetworkManager
@@ -378,7 +378,7 @@ fi
 
 # Install and configure bootloader
 pacman -S --noconfirm grub efibootmgr
-if [ "$PARTITION_TYPE" == "3" ]; then
+if [[ "$PARTITION_TYPE" == *"3"* ]]; then
   grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB
 else
   grub-install --target=i386-pc /dev/$INSTALL_DISK
@@ -397,6 +397,17 @@ if [[ "$SOFTWARE_SELECTION_DIALOG" == *"12"* ]]; then
     pacman -S --noconfirm ${SOFTWARE_SELECTION[$font]}
   done
 fi
+
+# Ensure Adwaita-dark is available and set it as the theme
+if pacman -Qi gnome-shell &> /dev/null; then
+  gsettings set org.gnome.desktop.interface gtk-theme 'Adwaita-dark'
+  gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'
+fi
+
+# Set a dark grey solid color background
+gsettings set org.gnome.desktop.background picture-uri ''
+gsettings set org.gnome.desktop.background primary-color '#2E2E2E'
+gsettings set org.gnome.desktop.background secondary-color '#2E2E2E'
 
 # Clean up
 pacman -Scc --noconfirm
