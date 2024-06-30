@@ -42,14 +42,14 @@ dialog --inputbox "Enter the hostname:" 8 40 2> hostname
 HOSTNAME=$(<hostname)
 
 dialog --inputbox "Enter the username:" 8 40 2> username
-USERNAME=$(<username)
+SET_USERNAME=$(<username)
 
 # Ask for root password
 dialog --passwordbox "Enter the root password:" 8 40 2> root_password
 ROOT_PASSWORD=$(<root_password)
 
 # Ask for user password
-dialog --passwordbox "Enter the password for $USERNAME:" 8 40 2> user_password
+dialog --passwordbox "Enter the password for $SET_USERNAME:" 8 40 2> user_password
 USER_PASSWORD=$(<user_password)
 
 # Ask for timezone
@@ -323,6 +323,8 @@ pacstrap /mnt base base-devel linux linux-firmware
 print_status "Generating fstab..."
 genfstab -U /mnt >> /mnt/etc/fstab
 
+ln -sf /usr/share/zoneinfo/$TIMEZONE /mnt/etc/localtime
+
 # Chroot into the new system
 arch-chroot /mnt /bin/bash <<EOF
 
@@ -345,9 +347,9 @@ echo "127.0.1.1 $HOSTNAME.localdomain $HOSTNAME" >> /etc/hosts
 echo "root:$ROOT_PASSWORD" | chpasswd
 
 # Create a new user
-useradd -m -G wheel $USERNAME
-echo "$USERNAME:$USER_PASSWORD" | chpasswd
-echo "$USERNAME ALL=(ALL) ALL" >> /etc/sudoers
+useradd -m -G wheel $SET_USERNAME
+echo "$SET_USERNAME:$USER_PASSWORD" | chpasswd
+echo "$SET_USERNAME ALL=(ALL) ALL" >> /etc/sudoers
 
 # Install necessary packages
 pacman -Syu --noconfirm
@@ -358,6 +360,9 @@ systemctl enable NetworkManager
 
 # Enable GDM
 systemctl enable gdm
+
+# Remove GDM logo
+dbus-launch gsettings set org.gnome.login-screen logo ''
 
 # Configure SSH server if selected
 if [ "$SSH_SERVER" == "1" ]; then
@@ -398,26 +403,12 @@ if [[ "$SOFTWARE_SELECTION_DIALOG" == *"12"* ]]; then
   done
 fi
 
-# Ensure Adwaita-dark is available and set it as the theme
-if pacman -Qi gnome-shell &> /dev/null; then
-  gsettings set org.gnome.desktop.interface gtk-theme 'Adwaita-dark'
-  gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'
-fi
-
-# Set a dark grey solid color background
-gsettings set org.gnome.desktop.background picture-uri ''
-gsettings set org.gnome.desktop.background primary-color '#2E2E2E'
-gsettings set org.gnome.desktop.background secondary-color '#2E2E2E'
-
 # Clean up
 pacman -Scc --noconfirm
-
-echo "Minimal GNOME installation is complete. Please exit the chroot and reboot your system."
-
 EOF
 
 # Exit chroot, unmount and reboot if selected
-print_status "Exiting chroot and unmounting..."
+print_status "Installation complete. Unmounting..."
 umount -R /mnt
 
 if [ "$AUTO_REBOOT" == "1" ]; then
