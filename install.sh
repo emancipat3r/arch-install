@@ -6,28 +6,51 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
-# Install dialog if not already installed
-if ! command -v dialog &> /dev/null; then
-  pacman -Sy --noconfirm dialog
+# Check for internet connection
+if ! ping -c 1 -W 5 8.8.8.8 > /dev/null 2>&1; then
+  echo "It doesn't appear you are connected to the Internet. Exiting..."
+  exit 1
+fi
+
+# Install gum if not already installed
+if ! command -v gum &> /dev/null; then
+  pacman -Sy --noconfirm gum
 fi
 
 # Colors for pretty printing
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+RED=$(gum style --foreground 196)
+GREEN=$(gum style --foreground "#9aff9a")
+YELLOW=$(gum style --foreground 226)
+BLUE=$(gum style --foreground 75)
+MAGENTA=$(gum style --foreground 201)
+CYAN=$(gum style --foreground 51)
+GRAY=$(gum style --foreground 250) # LightGray
+NC=$(gum style --reset)
+UNDERLINED=$(gum style --underline)
+ITALIC=$(gum style --italic)
+BOLD=$(gum style --bold)
+FAINT=$(gum style --faint)
+
+
+print_title() {
+    local title="$1"
+
+    gum style \
+        --foreground 212 --border-foreground 212 --border double \
+        --align center --width 50 --margin "1 2" --padding "2 4" \
+        "$title"
+}
 
 print_status() {
-  echo -e "${BLUE}==>${NC} $1"
+  echo -e "${BLUE}[-]${NC} $1"
 }
 
 print_success() {
-  echo -e "${GREEN}==>${NC} $1"
+  echo -e "${GREEN}[+]{NC} $1"
 }
 
 print_error() {
-  echo -e "${RED}==>${NC} $1"
+  echo -e "${RED}[!]${NC} $1"
 }
 
 # Get the amount of RAM in MB and round up to nearest whole number
@@ -137,126 +160,54 @@ declare -A SOFTWARE_SELECTION=(
   ["2"]="kitty"
   ["3"]="firefox"
   ["4"]="code"
-  ["5"]="git"
   ["6"]="vim"
-  ["7"]="aur-support"
-  ["8"]="mullvad-vpn"
-  ["9"]="virtualbox"
-  ["10"]="gnome-tweaks"
-  ["11"]="eog"
-  ["12"]="fonts"
-  ["13"]="libreoffice-fresh"
-  ["14"]="gimp"
-  ["15"]="inkscape"
-  ["16"]="gnome-calendar"
-  ["17"]="gnome-weather"
-  ["18"]="evolution"
-  ["19"]="docker"
-  ["20"]="nodejs npm"
-  ["21"]="python python-pip"
-  ["22"]="jdk-openjdk"
-  ["23"]="intellij-idea-community-edition"
-  ["24"]="gnome-calculator"
-  ["25"]="evince"
-  ["26"]="gnome-disk-utility"
-  ["27"]="nautilus"
-  ["28"]="gnome-screenshot"
-  ["29"]="gnome-control-center"
-  ["30"]="gnome-text-editor"
-  ["31"]="aria2"
-  ["32"]="zsh-autosuggestions"
-  ["33"]="zsh-syntax-highlighting"
-  ["34"]="vlc"
-  ["35"]="mpv"
-  ["36"]="spotify"
-  ["37"]="audacity"
-  ["38"]="doublecmd-gtk2"
-  ["39"]="discord"
-  ["40"]="slack-desktop"
-  ["41"]="zoom"
-  ["42"]="htop"
-  ["43"]="neofetch"
-  ["44"]="gnome-system-monitor"
-  ["45"]="gnome-usage"
-  ["46"]="google-chrome"
-  ["47"]="brave-bin"
-  ["48"]="openssh"
-  ["49"]="networkmanager"
-  ["50"]="papirus-icon-theme"
-  ["51"]="arc-gtk-theme"
+  ["7"]="mullvad-vpn"
+  ["8"]="virtualbox"
+  ["9"]="gnome-tweaks"
+  ["10"]="eog"
+  ["11"]="fonts"
+  ["12"]="python python-pip"
+  ["13"]="gnome-calculator"
+  ["14"]="evince"
+  ["15"]="gnome-disk-utility"
+  ["16"]="nautilus"
+  ["17"]="gnome-screenshot"
+  ["18"]="gnome-control-center"
+  ["19"]="gnome-text-editor"
+  ["20"]="aria2"
+  ["21"]="zsh-autosuggestions"
+  ["22"]="zsh-syntax-highlighting"
+  ["23"]="vlc"
+  ["24"]="openssh"
+  ["25"]="networkmanager"
 )
 
 SOFTWARE_SELECTION_DIALOG=$(dialog --title "Common Software" --checklist "Select software to install:" 25 70 45 \
   1 "Oh My Zsh" off \
   2 "Kitty" off \
   3 "Firefox" off \
-  4 "OSS Codium" off \
-  5 "Git" off \
+  4 "Code - OSS" off \
   6 "Vim" off \
-  7 "AUR Support" off \
-  8 "Mullvad VPN (AUR)" off \
-  9 "VirtualBox" off \
-  10 "Gnome Tweaks" off \
-  11 "Eye of GNOME (eog)" off \
-  12 "Fonts" off \
-  13 "LibreOffice" off \
-  14 "GIMP" off \
-  15 "Inkscape" off \
-  16 "GNOME Calendar" off \
-  17 "GNOME Weather" off \
-  18 "Evolution (Email Client)" off \
-  19 "Docker" off \
-  20 "Node.js" off \
-  21 "Python" off \
-  22 "JDK (Java Development Kit)" off \
-  23 "IntelliJ IDEA Community Edition" off \
-  24 "gnome-calculator" off \
-  25 "evince (Document Viewer)" off \
-  26 "gnome-disk-utility" off \
-  27 "nautilus (Files)" off \
-  28 "gnome-screenshot" off \
-  29 "gnome-control-center" off \
-  30 "gnome-text-editor" off \
-  31 "aria2" off \
-  32 "zsh-autosuggestions" off \
-  33 "zsh-syntax-highlighting" off \
-  34 "VLC Media Player" off \
-  35 "MPV Media Player" off \
-  36 "Spotify (AUR)" off \
-  37 "Audacity" off \
-  38 "Double Commander" off \
-  39 "Discord (AUR)" off \
-  40 "Slack (AUR)" off \
-  41 "Zoom (AUR)" off \
-  42 "Htop" off \
-  43 "Neofetch" off \
-  44 "GNOME System Monitor" off \
-  45 "GNOME Usage" off \
-  46 "Google Chrome (AUR)" off \
-  47 "Brave Browser (AUR)" off \
-  48 "OpenSSH" off \
-  49 "NetworkManager" off \
-  50 "Papirus Icon Theme" off \
-  51 "Arc GTK Theme" off \
+  7 "Mullvad VPN (AUR)" off \
+  8 "VirtualBox" off \
+  9 "Gnome Tweaks" off \
+  10 "Eye of GNOME (eog)" off \
+  11 "Fonts" off \
+  12 "Python" off \
+  13 "gnome-calculator" off \
+  14 "evince (Document Viewer)" off \
+  15 "Gnome Disk Utility" off \
+  16 "Nautilus (File Explorer)" off \
+  17 "Gnome Screenshot" off \
+  18 "Gnome Settings" off \
+  19 "gnome-text-editor" off \
+  20 "aria2" off \
+  21 "ZSH Auto Suggestions" off \
+  22 "ZSH Syntax Highlighting" off \
+  23 "VLC Media Player" off \
+  24 "OpenSSH" off \
+  25 "Network Manager" off \
   3>&1 1>&2 2>&3)
-
-# Ask for font installation if selected
-if [[ "$SOFTWARE_SELECTION_DIALOG" == *"12"* ]]; then
-  FONTS_SELECTION=$(dialog --title "Fonts" --checklist "Select fonts to install:" 25 70 12 \
-    1 "ttf-ubuntu-font-family" off \
-    2 "ttf-dejavu" off \
-    3 "ttf-bitstream-vera" off \
-    4 "ttf-liberation" off \
-    5 "noto-fonts" off \
-    6 "ttf-roboto" off \
-    7 "ttf-opensans" off \
-    8 "opendesktop-fonts" off \
-    9 "cantarell-fonts" off \
-    10 "freetype2" off \
-    11 "Nerd Fonts version of Fira Code" off \
-    12 "ttf-ms-fonts" off \
-    3>&1 1>&2 2>&3)
-fi
 
 # Partitioning and formatting based on selection
 print_status "Partitioning and formatting the disk..."
@@ -323,9 +274,7 @@ pacstrap /mnt base base-devel linux linux-firmware
 print_status "Generating fstab..."
 genfstab -U /mnt >> /mnt/etc/fstab
 
-ln -sf /usr/share/zoneinfo/$TIMEZONE /mnt/etc/localtime
-
-# Chroot into the new system
+# Chroot into new system 
 arch-chroot /mnt /bin/bash <<EOF
 
 # Set up timezone
@@ -353,7 +302,7 @@ echo "$SET_USERNAME ALL=(ALL) ALL" >> /etc/sudoers
 
 # Install necessary packages
 pacman -Syu --noconfirm
-pacman -S --noconfirm base-devel linux-headers networkmanager xorg-server xorg-xinit xorg-xrandr xorg-xsetroot xorg-xprop gnome-shell gnome-control-center gnome-terminal gdm gnome-tweaks dconf
+pacman -S --noconfirm base-devel linux-headers networkmanager xorg-server xorg-xinit xorg-xrandr xorg-xsetroot xorg-xprop gnome-shell gnome-control-center gnome-terminal gdm gnome-tweaks dconf git
 
 # Enable NetworkManager
 systemctl enable NetworkManager
@@ -398,9 +347,7 @@ done
 
 # Install fonts if selected
 if [[ "$SOFTWARE_SELECTION_DIALOG" == *"12"* ]]; then
-  for font in $FONTS_SELECTION; do
-    pacman -S --noconfirm ${SOFTWARE_SELECTION[$font]}
-  done
+  pacman -S --noconfirm ttf-ubuntu-font-family ttf-dejavu ttf-bitstream-vera ttf-liberation noto-fonts ttf-roboto ttf-opensans opendesktop-fonts cantarell-fonts freetype2 ttf-firacode-nerd ttf-ms-fonts
 fi
 
 # Clean up
