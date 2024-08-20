@@ -41,15 +41,16 @@ SWAP_SIZE="$((RAM_SIZE + 2048))M"
 dialog --inputbox "Enter the hostname:" 8 40 2> hostname
 HOSTNAME=$(<hostname)
 
-dialog --inputbox "Enter the username:" 8 40 2> username
-USERNAME=$(<username)
+dialog --inputbox "Enter the username:" 8 40 2> new_username_var
+NEW_USERNAME=$(<new_username_var)
+USERNAME
 
 # Ask for root password
 dialog --passwordbox "Enter the root password:" 8 40 2> root_password
 ROOT_PASSWORD=$(<root_password)
 
 # Ask for user password
-dialog --passwordbox "Enter the password for $USERNAME:" 8 40 2> user_password
+dialog --passwordbox "Enter the password for $NEW_USERNAME:" 8 40 2> user_password
 USER_PASSWORD=$(<user_password)
 
 # Ask for timezone
@@ -75,7 +76,7 @@ fi
 DISK_LIST=()
 while read -r line; do
   DISK_NAME=$(echo "$line" | awk '{print $1}')
-  DISK_SIZE=$(echo "$line" | awk '{print $4}')
+  DISK_SIZE=$(echo "$line" | awk '{print $2}')
   DISK_LIST+=("$DISK_NAME" "$DISK_SIZE" "off")
 done < <(lsblk -dn -o NAME,SIZE,TYPE | grep disk)
 
@@ -141,19 +142,15 @@ esac
 
 print_status "Creating and activating swap..."
 fallocate -l $SWAP_SIZE /mnt/swapfile
-check_result "Failed to create swap file"
 chmod 600 /mnt/swapfile
 mkswap /mnt/swapfile
 swapon /mnt/swapfile
-check_result "Failed to activate swap"
 
 print_status "Installing base system..."
 pacstrap /mnt base base-devel linux linux-firmware
-check_result "Base system installation failed"
 
 print_status "Generating fstab..."
 genfstab -U /mnt >> /mnt/etc/fstab
-check_result "Failed to generate fstab"
 
 # Chroot into the new system and configure
 arch-chroot /mnt /bin/bash <<EOF
@@ -176,9 +173,9 @@ echo "127.0.1.1 $HOSTNAME.localdomain $HOSTNAME" >> /etc/hosts
 echo "root:$ROOT_PASSWORD" | chpasswd
 
 # Create a new user
-useradd -m -G wheel $USERNAME
-echo "$USERNAME:$USER_PASSWORD" | chpasswd
-echo "$USERNAME ALL=(ALL) ALL" >> /etc/sudoers
+useradd -m -G wheel $NEW_USERNAME
+echo "$NEW_USERNAME:$USER_PASSWORD" | chpasswd
+echo "$NEW_USERNAME ALL=(ALL) ALL" >> /etc/sudoers
 
 # Install necessary packages
 echo "Updating package database and installing necessary packages..."
