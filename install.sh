@@ -217,7 +217,7 @@ EOF
 
 # Exit chroot, unmount and reboot if selected
 print_status "Exiting chroot and unmounting..."
-umount -R /mnt
+#umount -R /mnt
 
 if [ "$AUTO_REBOOT" == "1" ]; then
   print_status "Rebooting system..."
