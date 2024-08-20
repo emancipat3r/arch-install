@@ -206,7 +206,7 @@ fi
 # Install and configure bootloader
 pacman -S --noconfirm grub efibootmgr
 if [ "$PARTITION_TYPE" == "3" ]; then
-    grub-install --target=x86_64-efi --efi-directory=/boot --recheck /dev/$INSTALL_DISK
+    grub-install --target=x86_64-efi --efi-directory=/boot/efi --recheck /dev/$INSTALL_DISK
 else
     grub-install --target=i386-pc /dev/$INSTALL_DISK
 fi
