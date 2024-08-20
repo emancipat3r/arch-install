@@ -1,10 +1,5 @@
 #!/bin/bash
 
-# Setup logging
-exec 3>&1 4>&2
-trap 'exec 2>&4 1>&3' 0 1 2 3
-exec 1>log.out 2>&1
-
 # Check for root privileges
 if [ "$EUID" -ne 0 ]; then
   echo "Please run as root"
