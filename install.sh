@@ -30,15 +30,6 @@ print_error() {
   echo -e "${RED}==>${NC} $1"
 }
 
-# Function to check the last command's result
-check_result() {
-  if [ $? -ne 0 ]; then
-    print_error "An error occurred: $1"
-    exit 1
-  fi
-}
-
-
 # Get the amount of RAM in MB and round up to nearest whole number
 RAM_SIZE=$(grep MemTotal /proc/meminfo | awk '{print $2 / 1024}')
 RAM_SIZE=$(printf "%.0f" $RAM_SIZE)  # Round to the nearest integer
