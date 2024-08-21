@@ -19,20 +19,26 @@ fi
 # Colors for pretty printing
 RED='\033[0;31m'
 GREEN='\033[0;32m'
+DARK_GREEN='\033[38;2;84;153;76m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-print_status() {
-  echo -e "${BLUE}==>${NC} $1"
+# Timestamp function for logging output
+timestamp() {
+  date '+%H:%M:%S' 
 }
 
-print_success() {
-  echo -e "${GREEN}==>${NC} $1"
+info() {
+  echo -e "${CUSTOM_GREEN}[$(timestamp)]\t${BLUE}${BOLD} INFO:${NC} $1"
 }
 
-print_error() {
-  echo -e "${RED}==>${NC} $1"
+warn() {
+  echo -e "${CUSTOM_GREEN}[$(timestamp)]\t${BLUE}${YELLOW} WARNING:${NC} $1"
+}
+
+error() {
+  echo -e "${CUSTOM_GREEN}[$(timestamp)]\t${RED}${BOLD} ERROR:${NC} $1"
 }
 
 # Software array to pick from for later
@@ -44,6 +50,9 @@ declare -A software_options=(
     ["zsh"]="Zsh"
     ["Oh-My-Zsh"]="Oh-My-Zsh"
 )
+
+# Common directories as per the XDG user directories specification for later
+declare -a directories=("Documents" "Downloads" "Music" "Pictures" "Videos" "Desktop")
 
 # Sort mirrorlist by speed
 reflector --latest 20 --age 24 --protocol https --sort rate --save /etc/pacman.d/mirrorlist
@@ -131,24 +140,23 @@ if [ "$SSH_SERVER" == "1" ]; then
     3>&1 1>&2 2>&3)
 fi
 
-# Build the checklist options from the associative array
+# Build the checklist options from the software array
 checklist_options=()
 for key in "${!software_options[@]}"; do
     checklist_options+=("$key" "${software_options[$key]}" "off")
 done
 
-# Display the checklist dialog
+# Display the software selection dialog
 selected_software=$(dialog --title "Select Software to Install" --checklist "Choose software:" 15 70 6 "${checklist_options[@]}" 3>&1 1>&2 2>&3)
 
-# Inside your chroot section or before entering chroot
-# Convert selected software into a space-separated string appropriate for pacman
+# Convert selected software into a space-separated string appropriate for pacman during chroot
 software_to_install=""
 for software in $selected_software; do
   if [ "$software" != "yay" ]; then
     software_to_install+="$software "  # Append each selected software package followed by a space
 done
 
-print_status "Partitioning and formatting the disk..."
+info "Partitioning and formatting the disk"
 case $PARTITION_TYPE in
     1)
         parted /dev/$INSTALL_DISK --script mklabel msdos
@@ -175,62 +183,123 @@ case $PARTITION_TYPE in
         ;;
 esac
 
-print_status "Creating and activating swap..."
+info "Creating and activating swap"
 fallocate -l $SWAP_SIZE /mnt/swapfile
 chmod 600 /mnt/swapfile
 mkswap /mnt/swapfile
 swapon /mnt/swapfile
 
-print_status "Installing base system..."
+info "Installing base system"
 pacstrap /mnt base base-devel linux linux-firmware
 
-print_status "Generating fstab..."
+info "Generating fstab"
 genfstab -U /mnt >> /mnt/etc/fstab
 
 # Chroot into the new system and configure
+info "Chrooting"
 arch-chroot /mnt /bin/bash <<EOF
+# Colors for pretty printing
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+DARK_GREEN='\033[38;2;84;153;76m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+# Timestamp function for logging output
+timestamp() {
+  date '+%H:%M:%S' 
+}
+
+info() {
+  echo -e "${CUSTOM_GREEN}[$(timestamp)]\t${BLUE}${BOLD} INFO:${NC} $1"
+}
+
+warn() {
+  echo -e "${CUSTOM_GREEN}[$(timestamp)]\t${BLUE}${YELLOW} WARNING:${NC} $1"
+}
+
+error() {
+  echo -e "${CUSTOM_GREEN}[$(timestamp)]\t${RED}${BOLD} ERROR:${NC} $1"
+}
+
 # Install reflector if not already installed
+info "Checking if Reflector is installed"
 if ! command -v reflector &> /dev/null; then
+  info "Reflector is not installed, installing..."
   pacman -S --noconfirm reflector
 fi
 
 # Sort mirrorlist by speed
+info "Sorting mirrorlist for pacman usage"
 reflector --latest 20 --age 24 --protocol https --sort rate --save /etc/pacman.d/mirrorlist
 
 # Set up timezone
+info "Setting up timezone"
 ln -sf /usr/share/zoneinfo/$TIMEZONE /etc/localtime
 hwclock --systohc
 
 # Set up localization
+info "Setting up localization"
 echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen
 locale-gen
 echo "LANG=en_US.UTF-8" > /etc/locale.conf
 
 # Set up hostname and network
+info "Setting up hostname and network"
 echo $HOSTNAME > /etc/hostname
 echo "127.0.0.1 localhost" >> /etc/hosts
 echo "::1       localhost" >> /etc/hosts
 echo "127.0.1.1 $HOSTNAME.localdomain $HOSTNAME" >> /etc/hosts
 
 # Set root password
+info "Setting root password"
 echo "root:$ROOT_PASSWORD" | chpasswd
 
 # Create a new user
+info "Creating new user"
 useradd -m -G wheel $NEW_USERNAME
+info "Setting new user's password"
 echo "$NEW_USERNAME:$USER_PASSWORD" | chpasswd
+info "Adding new user to sudoers"
 echo "$NEW_USERNAME ALL=(ALL) ALL" >> /etc/sudoers
 
-# Install necessary packages
+# Get the username for whom to create directories
+user_home="/home/$NEW_USERNAME"
+
+# Ensure the home directory exists before attempting to create subdirectories
+info "Creating new user's home subdirectories"
+if [ -d "$user_home" ]; then
+    for dir in "${directories[@]}"; do
+        if [ ! -d "${user_home}/${dir}" ]; then
+            mkdir -p "${user_home}/${dir}"
+            chown $NEW_USERNAME:$NEW_USERNAME "${user_home}/${dir}"
+            echo "Created ${dir} directory for user $NEW_USERNAME."
+        fi
+    done
+else
+    error "User home directory does not exist, skipping directory creation..."
+fi
+
+
+info "Installing necessary packages"
 echo "Updating package database and installing necessary packages..."
 pacman -Syu --noconfirm
-pacman -S --noconfirm base-devel linux-headers networkmanager xorg-server xorg-xinit xorg-xrandr xorg-xsetroot xorg-xprop gnome-shell gnome-control-center gnome-terminal gdm git
+pacman -S --noconfirm base-devel linux-headers networkmanager xorg-server xorg-xinit xorg-xrandr xorg-xsetroot xorg-xprop gnome-shell gnome-control-center gnome-terminal gdm git man-db
 
-# Enable essential services
+info "Installing additional packages"
+pacman -S --noconfirm nautilus gnome-tweaks
+
+info "Installing fonts"
+pacman -S ttf-hack-nerd ttf-dejavu-nerd ttf-firacode-nerd ttf-sourcecodepro-nerd ttf-terminus-nerd ttf-ubuntu-nerd ttf-ubuntu-mono-nerd 
+
+info "Enabling essential services"
 systemctl enable NetworkManager
 systemctl enable gdm
 
 # SSH configuration if needed
 if [ "$SSH_SERVER" == "1" ]; then
+    info "Configuring SSH server"
     pacman -S --noconfirm openssh
     systemctl enable sshd
     sed -i "s/#Port 22/Port $SSHD_PORT/" /etc/ssh/sshd_config
@@ -248,29 +317,27 @@ fi
 
 # Install the selected software with a single pacman command
 if [ -n "$software_to_install" ]; then
-    echo "Installing selected software packages: $software_to_install"
+    info "Installing selected software packages"
     pacman -S --noconfirm $software_to_install
 else
-    echo "No software packages were selected for installation."
+    warn "No software packages were selected for installation"
 fi
 
 # Special handling for Yay if it was selected
 if [[ "$selected_software" =~ "yay" ]]; then
-  echo "Installing Yay..."
+  info "Installing Yay"
   su - $NEW_USERNAME -c "cd /tmp && git clone https://aur.archlinux.org/yay.git && cd yay && makepkg -si --noconfirm"
 fi
 
 # Special handling for OMZ if it was selected
 if [[ "$selected_software" =~ "oh-my-zsh" ]]; then
-  echo "Installing Oh My Zsh..."
+  info "Installing Oh My Zsh"
   pacman -S --noconfirm zsh
   chsh -s /bin/zsh $NEW_USERNAME
   su - $NEW_USERNAME -c 'export RUNZSH=no; export CHSH=no; sh -c "$(curl -fsSL https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"'
 fi
 
-
-
-# Install and configure bootloader
+info "Installing and configuring bootloader"
 pacman -S --noconfirm grub efibootmgr
 if [ "$PARTITION_TYPE" == "3" ]; then
     grub-install --target=x86_64-efi --efi-directory=/boot/efi --recheck /dev/$INSTALL_DISK
@@ -279,16 +346,16 @@ else
 fi
 grub-mkconfig -o /boot/grub/grub.cfg
 
-echo "Minimal GNOME installation is complete. Please exit the chroot and reboot your system."
+info "OS installation and configuration is complete"
 EOF
 
 # Exit chroot, unmount and reboot if selected
-print_status "Exiting chroot and unmounting..."
+info "Exiting chroot and unmounting..."
 umount -R /mnt
 
 if [ "$AUTO_REBOOT" == "1" ]; then
-  print_status "Rebooting system..."
+  info "Rebooting system..."
   reboot
 else
-  print_success "Installation complete. Please reboot the system."
+  info "Installation complete. Please reboot the system."
 fi
