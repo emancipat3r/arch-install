@@ -11,12 +11,18 @@ if ! command -v dialog &> /dev/null; then
   pacman -Sy --noconfirm dialog
 fi
 
+# Install reflector if not already installed
+if ! command -v reflector &> /dev/null; then
+  pacman -S --noconfirm reflector
+fi
+
+
 # Colors for pretty printing
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 print_status() {
   echo -e "${BLUE}==>${NC} $1"
@@ -29,6 +35,10 @@ print_success() {
 print_error() {
   echo -e "${RED}==>${NC} $1"
 }
+
+# Sort mirrorlist by speed
+reflector --latest 20 --age 24 --protocol https --sort rate --save /etc/pacman.d/mirrorlist
+
 
 # Get the amount of RAM in MB and round up to nearest whole number
 RAM_SIZE=$(grep MemTotal /proc/meminfo | awk '{print $2 / 1024}')
@@ -154,6 +164,14 @@ genfstab -U /mnt >> /mnt/etc/fstab
 
 # Chroot into the new system and configure
 arch-chroot /mnt /bin/bash <<EOF
+# Install reflector if not already installed
+if ! command -v reflector &> /dev/null; then
+  pacman -S --noconfirm reflector
+fi
+
+# Sort mirrorlist by speed
+reflector --latest 20 --age 24 --protocol https --sort rate --save /etc/pacman.d/mirrorlist
+
 # Set up timezone
 ln -sf /usr/share/zoneinfo/$TIMEZONE /etc/localtime
 hwclock --systohc
