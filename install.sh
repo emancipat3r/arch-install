@@ -16,7 +16,6 @@ if ! command -v reflector &> /dev/null; then
   pacman -S --noconfirm reflector
 fi
 
-
 # Colors for pretty printing
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -36,9 +35,18 @@ print_error() {
   echo -e "${RED}==>${NC} $1"
 }
 
+# Software array to pick from for later
+declare -A software_options=(
+    ["firefox"]="Firefox"
+    ["vim"]="Vim"
+    ["kitty"]="Vim"
+    ["yay"]="Yay"
+    ["zsh"]="Zsh"
+    ["Oh-My-Zsh"]="Oh-My-Zsh"
+)
+
 # Sort mirrorlist by speed
 reflector --latest 20 --age 24 --protocol https --sort rate --save /etc/pacman.d/mirrorlist
-
 
 # Get the amount of RAM in MB and round up to nearest whole number
 RAM_SIZE=$(grep MemTotal /proc/meminfo | awk '{print $2 / 1024}')
@@ -123,6 +131,23 @@ if [ "$SSH_SERVER" == "1" ]; then
     3>&1 1>&2 2>&3)
 fi
 
+# Build the checklist options from the associative array
+checklist_options=()
+for key in "${!software_options[@]}"; do
+    checklist_options+=("$key" "${software_options[$key]}" "off")
+done
+
+# Display the checklist dialog
+selected_software=$(dialog --title "Select Software to Install" --checklist "Choose software:" 15 70 6 "${checklist_options[@]}" 3>&1 1>&2 2>&3)
+
+# Inside your chroot section or before entering chroot
+# Convert selected software into a space-separated string appropriate for pacman
+software_to_install=""
+for software in $selected_software; do
+  if [ "$software" != "yay" ]; then
+    software_to_install+="$software "  # Append each selected software package followed by a space
+done
+
 print_status "Partitioning and formatting the disk..."
 case $PARTITION_TYPE in
     1)
@@ -198,7 +223,7 @@ echo "$NEW_USERNAME ALL=(ALL) ALL" >> /etc/sudoers
 # Install necessary packages
 echo "Updating package database and installing necessary packages..."
 pacman -Syu --noconfirm
-pacman -S --noconfirm base-devel linux-headers networkmanager xorg-server xorg-xinit xorg-xrandr xorg-xsetroot xorg-xprop gnome-shell gnome-control-center gnome-terminal gdm
+pacman -S --noconfirm base-devel linux-headers networkmanager xorg-server xorg-xinit xorg-xrandr xorg-xsetroot xorg-xprop gnome-shell gnome-control-center gnome-terminal gdm git
 
 # Enable essential services
 systemctl enable NetworkManager
@@ -220,6 +245,30 @@ if [ "$SSH_SERVER" == "1" ]; then
         sed -i "s/#PasswordAuthentication yes/PasswordAuthentication no/" /etc/ssh/sshd_config
     fi
 fi
+
+# Install the selected software with a single pacman command
+if [ -n "$software_to_install" ]; then
+    echo "Installing selected software packages: $software_to_install"
+    pacman -S --noconfirm $software_to_install
+else
+    echo "No software packages were selected for installation."
+fi
+
+# Special handling for Yay if it was selected
+if [[ "$selected_software" =~ "yay" ]]; then
+  echo "Installing Yay..."
+  su - $NEW_USERNAME -c "cd /tmp && git clone https://aur.archlinux.org/yay.git && cd yay && makepkg -si --noconfirm"
+fi
+
+# Special handling for OMZ if it was selected
+if [[ "$selected_software" =~ "oh-my-zsh" ]]; then
+  echo "Installing Oh My Zsh..."
+  pacman -S --noconfirm zsh
+  chsh -s /bin/zsh $NEW_USERNAME
+  su - $NEW_USERNAME -c 'export RUNZSH=no; export CHSH=no; sh -c "$(curl -fsSL https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"'
+fi
+
+
 
 # Install and configure bootloader
 pacman -S --noconfirm grub efibootmgr
